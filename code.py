@@ -1,16 +1,28 @@
 #!/usr/bin/env python
 # code.py for Neutron Wand
 
-# SPDX-FileCopyrightText: 2019, 2023 Kattni Rembor for Adafruit Industries
-#
-# SPDX-License-Identifier: MIT
-
-"""Simple rainbow swirl example for 3W LED"""
 import time
-import pwmio
+
 import board
 import digitalio
+import neopixel
+import pwmio
 
+# NeoPixel Strip info
+NEOPIXEL_NUM_PIXELS = 5  # NeoPixel strip length (in pixels)
+NEOPIXEL_PIN = board.D5
+NEOPIXEL_BRIGHTNESS = 0.1
+
+# 3 watt LED info
+THREEWATT_PIN_RED = board.D11
+THREEWATT_PIN_GREEN = board.D12
+THREEWATT_PIN_BLUE = board.D13
+THREEWATT_DUTY_CYCLE = 0
+THREEWATT_FREQUENCY = 20000
+
+strip = neopixel.NeoPixel(NEOPIXEL_PIN, NEOPIXEL_NUM_PIXELS, brightness=NEOPIXEL_BRIGHTNESS)
+
+# Enable Prop-Maker FeatherWing board
 enable = digitalio.DigitalInOut(board.D10)
 enable.direction = digitalio.Direction.OUTPUT
 enable.value = True
@@ -28,14 +40,29 @@ def colorwheel(pos):
     return int(pos * 3), 0, int(255 - pos * 3)
 
 
-red = pwmio.PWMOut(board.D11, duty_cycle=0, frequency=20000)
-green = pwmio.PWMOut(board.D12, duty_cycle=0, frequency=20000)
-blue = pwmio.PWMOut(board.D13, duty_cycle=0, frequency=20000)
+# Setup and turn off the 3 watt LED
+threewatt_red = pwmio.PWMOut(THREEWATT_PIN_RED,
+                             duty_cycle=0,
+                             frequency=THREEWATT_FREQUENCY)
+threewatt_green = pwmio.PWMOut(THREEWATT_PIN_GREEN,
+                               duty_cycle=0,
+                               frequency=THREEWATT_FREQUENCY)
+threewatt_blue = pwmio.PWMOut(THREEWATT_PIN_BLUE,
+                              duty_cycle=0,
+                              frequency=THREEWATT_FREQUENCY)
 
+# pre-calculate LED RGB scaling constant
+LED_COLOR_SCALE = 65536 / 256
+
+# main - loop forever
 while True:
     for i in range(255):
         r, g, b = colorwheel(i)
-        red.duty_cycle = int(r * 65536 / 256)
-        green.duty_cycle = int(g * 65536 / 256)
-        blue.duty_cycle = int(b * 65536 / 256)
+
+        strip.fill((r, g, b))
+
+        threewatt_red.duty_cycle = int(r * LED_COLOR_SCALE)
+        threewatt_green.duty_cycle = int(g * LED_COLOR_SCALE)
+        threewatt_blue.duty_cycle = int(b * LED_COLOR_SCALE)
+
         time.sleep(0.05)
