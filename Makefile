@@ -58,7 +58,7 @@ install: all
 		neopixel* \
 		*debouncer* \
 		*adafruit_fancyled* \
-		adafruit_lis3dh \
+		adafruit_lis3dh* \
 		adafruit_bus_device \
 			$(CODEPY_LIB_DIR)
 

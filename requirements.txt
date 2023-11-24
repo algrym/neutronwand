@@ -1,0 +1,4 @@
+adafruit-circuitpython-busdevice==5.2.6
+adafruit-circuitpython-fancyled==1.4.18
+adafruit-circuitpython-neopixel==6.3.10
+circuitpython-stubs==8.2.8
