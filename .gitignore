@@ -379,5 +379,8 @@ downloads
 # ignore .idea/ directory
 .idea/
 
-# ignore version.py that updates each install
-version.py
+# ignore mp3 files
+*.mp3
+
+# ignore code.py that updates each install
+code.py
