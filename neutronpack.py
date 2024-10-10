@@ -165,7 +165,6 @@ def main_loop():
     threewatt_red = pwmio.PWMOut(board.D11, duty_cycle=0, frequency=constants['threewatt_frequency'])
     threewatt_green = pwmio.PWMOut(board.D12, duty_cycle=0, frequency=constants['threewatt_frequency'])
     threewatt_blue = pwmio.PWMOut(board.D13, duty_cycle=0, frequency=constants['threewatt_frequency'])
-
     # END OLD CODE
 
     print(f" - neopixel v{neopixel.__version__}")
@@ -208,9 +207,11 @@ def main_loop():
 
             next_watch_dog_clock = clock + (constants['watch_dog_timeout_secs'] * 500)
 
+        # START OLD CODE
         r, g, b = colorwheel(loop_count % 255)
         stick_pixels.fill((r, g, b))
 
         threewatt_red.duty_cycle = int(r * LED_COLOR_SCALE)
         threewatt_green.duty_cycle = int(g * LED_COLOR_SCALE)
         threewatt_blue.duty_cycle = int(b * LED_COLOR_SCALE)
+        # END OLD CODE
