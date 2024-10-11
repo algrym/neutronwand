@@ -3,7 +3,6 @@
 import gc
 import os
 import sys
-import time
 
 import adafruit_fancyled.adafruit_fancyled as fancyled
 import board
@@ -38,9 +37,9 @@ def load_constants():
 
 # State definitions
 class State:
-    POWER_ON = 1
-    STANDBY = 2
-    LOOP_IDLE = 3
+    POWER_ON = 1  # Trigger active!
+    STANDBY = 2  # Trigger inactive.
+    LOOP_IDLE = 3  # Wall power on, hero power off
 
 
 # Function to get a pin from board module
@@ -206,6 +205,19 @@ def main_loop():
                 f"{format_time(clock - start_clock)} watchdog fed, next in {(constants['watch_dog_timeout_secs'] * 0.5)} secs")
 
             next_watch_dog_clock = clock + (constants['watch_dog_timeout_secs'] * 500)
+
+        # Handle updates by state
+        if current_state == State.STANDBY:
+            pass
+        elif current_state == State.POWER_ON:
+            pass
+        elif current_state == State.LOOP_IDLE:
+            pass
+        else:
+            # We shouldn't be in this state
+            print(f"*** Switching from {print_state(current_state)} to {print_state(State.STANDBY)}")
+            current_state = State.STANDBY
+
 
         # START OLD CODE
         r, g, b = colorwheel(loop_count % 255)
