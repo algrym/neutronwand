@@ -2,6 +2,7 @@
 
 import gc
 import os
+import random
 import sys
 
 import adafruit_fancyled.adafruit_fancyled as fancyled
@@ -28,6 +29,8 @@ def load_constants():
     constants['neopixel_stick_brightness'] = float(os.getenv('neopixel_stick_brightness', "0.1"))
     constants['threewatt_frequency'] = int(os.getenv('threewatt_frequency', "20000"))
     constants['watch_dog_timeout_secs'] = int(os.getenv('watch_dog_timeout_secs', "7"))
+    constants['power_meter_speed'] = int(os.getenv('power_meter_speed', "10"))
+    constants['power_meter_starting_speed'] = int(os.getenv('power_meter_starting_speed', "100"))
     constants['propmaker_featherwing_enable'] = get_pin(os.getenv('propmaker_featherwing_enable', "D10"))
 
     print(f" - Loaded {len(constants)} constants from settings.toml")
@@ -167,9 +170,6 @@ def main_loop():
     OFF = (0, 0, 0)
     color_list = [RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE, WHITE]
 
-    # START OLD CODE
-    LED_COLOR_SCALE = 65536 / 256
-
     # Setup 3 watt LEDs
     threewatt_red = pwmio.PWMOut(board.D11, duty_cycle=0,
                                  frequency=constants['threewatt_frequency'])
@@ -177,8 +177,34 @@ def main_loop():
                                    frequency=constants['threewatt_frequency'])
     threewatt_blue = pwmio.PWMOut(board.D13, duty_cycle=0,
                                   frequency=constants['threewatt_frequency'])
-    # END OLD CODE
+    threewatt_color = OFF
+    LED_COLOR_SCALE = 65536 / 256
 
+    def set_threewatt_color(color):
+        """
+        Set the three-watt LED color.
+
+        :param color: The RGB color to set. Can be either a tuple (R, G, B) or an int (packed RGB).
+        """
+        LED_COLOR_SCALE = 65536 / 256  # Scale factor for PWM (0-255 to 0-65535)
+
+        # If the color is a tuple, unpack the RGB components
+        if isinstance(color, tuple):
+            red, green, blue = color
+        # If the color is an integer (packed RGB), extract the RGB components
+        elif isinstance(color, int):
+            red = (color >> 16) & 0xFF
+            green = (color >> 8) & 0xFF
+            blue = color & 0xFF
+        else:
+            raise ValueError("Color must be either a tuple (R, G, B) or an int (packed RGB)")
+
+        # Convert color components to integers for PWM (scale to 0-65535)
+        threewatt_red.duty_cycle = int(red * LED_COLOR_SCALE)  # Red component
+        threewatt_green.duty_cycle = int(green * LED_COLOR_SCALE)  # Green component
+        threewatt_blue.duty_cycle = int(blue * LED_COLOR_SCALE)  # Blue component
+
+    # Setup Neopixel stick
     print(f" - neopixel v{neopixel.__version__}")
     print(f"   - NeoPixel stick size {constants['neopixel_stick_size']} on {constants['neopixel_stick_pin']}")
     stick_pixels = neopixel.NeoPixel(constants['neopixel_stick_pin'],
@@ -188,6 +214,14 @@ def main_loop():
     stick_pixels.fill(OFF)
 
     watch_dog = setup_watch_dog(constants['watch_dog_timeout_secs'])
+
+    # Initialize power meter counters
+    power_meter_speed: int = constants['power_meter_speed']
+    next_power_meter_clock: int = 0
+    power_meter_max: int = 1
+    power_meter_max_previous: int = 0
+    power_meter_cursor: int = 1
+    power_meter_limit: int = 1
 
     # Initialize timers and counters
     start_clock: int = supervisor.ticks_ms()
@@ -205,6 +239,17 @@ def main_loop():
 
         # process the stats output
         if clock > next_stat_clock:
+            # DEBUG: Remove this when a real state transition is added
+            if current_state == State.STANDBY:
+                print(f"*** Switching from {print_state(current_state)} to {print_state(State.LOOP_IDLE)}")
+                current_state = State.LOOP_IDLE
+            elif current_state == State.LOOP_IDLE:
+                print(f"*** Switching from {print_state(current_state)} to {print_state(State.POWER_ON)}")
+                current_state = State.POWER_ON
+            else:
+                print(f"*** Switching from {print_state(current_state)} to {print_state(State.STANDBY)}")
+                current_state = State.STANDBY
+
             elapsed_time = (clock - start_clock) / 1000  # Convert ms to seconds
             loops_per_second = loop_count / elapsed_time if elapsed_time > 0 else 0
             print(
@@ -221,22 +266,66 @@ def main_loop():
 
         # Handle updates by state
         if current_state == State.STANDBY:
-            pass
+            # Blink the Power Meter
+            if clock > next_power_meter_clock:
+                # Calculate time of next power meter update
+                next_power_meter_clock = clock + power_meter_speed
+                # Blink quietly in STANDBY
+                if power_meter_cursor >= len(stick_pixels):
+                    power_meter_cursor = 1  # Reset cursor if it exceeds the number of pixels
+                else:
+                    stick_pixels[0] = OFF if power_meter_cursor == 0 else YELLOW
+                    power_meter_cursor += 1
+
         elif current_state == State.POWER_ON:
-            pass
+            # Trigger active: flash the three-watt LED!
+            flash_random = random.randrange(0, 20)
+            if flash_random == 0:
+                set_threewatt_color(RED)
+            elif flash_random == 1:
+                set_threewatt_color(BLUE)
+            elif flash_random < 10:
+                set_threewatt_color(WHITE)
+            else:
+                set_threewatt_color(OFF)
+
+            # Trigger active: decrement the power meter!
+            if clock > next_power_meter_clock:
+                # Calculate time of next power meter update
+                next_power_meter_clock = clock + (power_meter_speed * 50)
+                if power_meter_cursor > 0 and power_meter_cursor < len(stick_pixels):
+                    stick_pixels[power_meter_cursor] = OFF
+                    stick_pixels[power_meter_max_previous] = ORANGE
+                    power_meter_cursor -= 1
+
         elif current_state == State.LOOP_IDLE:
-            pass
+            # Update the Power Meter
+            if clock > next_power_meter_clock:
+                # Calculate time of next power meter update
+                next_power_meter_clock = clock + power_meter_speed
+                # reset if the cursor is over the max
+                if power_meter_cursor > power_meter_max:
+                    # Increment the limit until we reach maximum
+                    if power_meter_limit < (len(stick_pixels) - 1):
+                        power_meter_limit += 1
+                    elif power_meter_limit > (len(stick_pixels) - 1):
+                        power_meter_limit = len(stick_pixels) - 1
+
+                    # Mark the limits and determine the next
+                    power_meter_max_previous = clamp(power_meter_max, 0, len(stick_pixels))
+                    power_meter_max = random.randrange(0, power_meter_limit)
+
+                    # Blank the meter and start again
+                    power_meter_cursor = 0
+                    stick_pixels.fill(OFF)
+
+                # turn on the appropriate pixels
+                stick_pixels[power_meter_cursor] = ORANGE
+
+                # Next time, try a little higher.
+                power_meter_cursor = clamp(power_meter_cursor + 1, 0, len(stick_pixels) - 1)
         else:
             # We shouldn't be in this state
             print(
                 f"*** Switching from {print_state(current_state)} to {print_state(State.STANDBY)}")
             current_state = State.STANDBY
-
-        # START OLD CODE
-        r, g, b = colorwheel(loop_count % 255)
-        stick_pixels.fill((r, g, b))
-
-        threewatt_red.duty_cycle = int(r * LED_COLOR_SCALE)
-        threewatt_green.duty_cycle = int(g * LED_COLOR_SCALE)
-        threewatt_blue.duty_cycle = int(b * LED_COLOR_SCALE)
-        # END OLD CODE
