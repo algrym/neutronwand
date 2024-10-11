@@ -11,6 +11,7 @@ import microcontroller
 import neopixel
 import pwmio
 import supervisor
+from analogio import AnalogIn
 from watchdog import WatchDogMode
 
 from code import __version__  # Import __version__ from code.py
@@ -102,7 +103,7 @@ def pretty_print_bytes(size):
     # Find the largest unit to express the size in full units
     for unit in units:
         if size < step:
-            return f"{size:.2f} {unit}"
+            return f"{size:.2f}{unit}"
         size /= step
 
     # If size is large, it will be formatted in GB from the loop
@@ -121,6 +122,11 @@ def colorwheel(pos):
         return pos * 3, 0, 255 - pos * 3
 
 
+# From https://learn.adafruit.com/adafruit-feather-m4-express-atsamd51/power-management
+def get_voltage(pin):
+    return (pin.value * 3.3) / 65536 * 2
+
+
 # Main loop
 def main_loop():
     # Print startup information
@@ -135,11 +141,15 @@ def main_loop():
     starting_memory_free = gc.mem_free()
     print(f" - Free memory: {pretty_print_bytes(starting_memory_free)}")
 
+    # Initialize battery readings before we start beating it up
+    vbat_voltage = AnalogIn(board.VOLTAGE_MONITOR)
+    print(f" - Battery: {get_voltage(vbat_voltage):.2f}V")
+
     # Read in constants
     constants = load_constants()
 
     # Enable PropMaker FeatherWing
-    print(f" - PropmMaker FeatherWing enabled on {constants['propmaker_featherwing_enable']}")
+    print(f" - PropMaker FeatherWing enabled on {constants['propmaker_featherwing_enable']}")
     enable = digitalio.DigitalInOut(constants['propmaker_featherwing_enable'])
     enable.direction = digitalio.Direction.OUTPUT
     enable.value = True
@@ -161,9 +171,12 @@ def main_loop():
     LED_COLOR_SCALE = 65536 / 256
 
     # Setup 3 watt LEDs
-    threewatt_red = pwmio.PWMOut(board.D11, duty_cycle=0, frequency=constants['threewatt_frequency'])
-    threewatt_green = pwmio.PWMOut(board.D12, duty_cycle=0, frequency=constants['threewatt_frequency'])
-    threewatt_blue = pwmio.PWMOut(board.D13, duty_cycle=0, frequency=constants['threewatt_frequency'])
+    threewatt_red = pwmio.PWMOut(board.D11, duty_cycle=0,
+                                 frequency=constants['threewatt_frequency'])
+    threewatt_green = pwmio.PWMOut(board.D12, duty_cycle=0,
+                                   frequency=constants['threewatt_frequency'])
+    threewatt_blue = pwmio.PWMOut(board.D13, duty_cycle=0,
+                                  frequency=constants['threewatt_frequency'])
     # END OLD CODE
 
     print(f" - neopixel v{neopixel.__version__}")
@@ -195,7 +208,7 @@ def main_loop():
             elapsed_time = (clock - start_clock) / 1000  # Convert ms to seconds
             loops_per_second = loop_count / elapsed_time if elapsed_time > 0 else 0
             print(
-                f"{format_time(clock - start_clock)} {print_state(current_state)} loop {loop_count:,} at {loops_per_second:.2f} loops/s free={pretty_print_bytes(gc.mem_free())}")
+                f"{format_time(clock - start_clock)} {print_state(current_state)} loop {loop_count:,} at {loops_per_second:.2f} loops/s free={pretty_print_bytes(gc.mem_free())} VBat={get_voltage(vbat_voltage):.2f}V")
             next_stat_clock = clock + constants['stat_clock_time_ms']
 
         # Periodically feed the watch dog
@@ -215,9 +228,9 @@ def main_loop():
             pass
         else:
             # We shouldn't be in this state
-            print(f"*** Switching from {print_state(current_state)} to {print_state(State.STANDBY)}")
+            print(
+                f"*** Switching from {print_state(current_state)} to {print_state(State.STANDBY)}")
             current_state = State.STANDBY
-
 
         # START OLD CODE
         r, g, b = colorwheel(loop_count % 255)
