@@ -9,7 +9,10 @@ CODEPY_DIR=$(CIRCUIT_PYTHON_DIR)/
 CODEPY_LIB_DIR=$(CIRCUIT_PYTHON_DIR)/lib
 
 # These shouldn't need changing, but eh ...
-CURLFLAGS="--location"
+CURLFLAGS=--location
+
+# Rsync flags to work around failures during write
+RSYNCFLAGS=--archive --copy-links --checksum --cvs-exclude --inplace --partial --update --checksum
 
 all: venv downloads .gitignore code.py
 
@@ -52,10 +55,10 @@ downloads/adafruit-circuitpython-$(CIRCUIT_PYTHON_BOARD)-en_US-$(CIRCUIT_PYTHON_
 	curl $(CURLFLAGS) https://downloads.circuitpython.org/bin/$(CIRCUIT_PYTHON_BOARD)/en_US/adafruit-circuitpython-$(CIRCUIT_PYTHON_BOARD)-en_US-$(CIRCUIT_PYTHON_VER).uf2 -o $(@)
 
 install_circuit_python: downloads/adafruit-circuitpython-$(CIRCUIT_PYTHON_BOARD)-en_US-$(CIRCUIT_PYTHON_VER).uf2
-	rsync -av --progress downloads/adafruit-circuitpython-$(CIRCUIT_PYTHON_BOARD)-en_US-$(CIRCUIT_PYTHON_VER).uf2 $(UF2_DIR)/
+	rsync $(RSYNCFLAGS) --progress downloads/adafruit-circuitpython-$(CIRCUIT_PYTHON_BOARD)-en_US-$(CIRCUIT_PYTHON_VER).uf2 $(UF2_DIR)/
 
 install: all
-	rsync -avlcC \
+	rsync $(RSYNCFLAGS) \
 		neutronpack.py code.py \
 			$(CODEPY_DIR)
 	test -d $(CODEPY_LIB_DIR) || mkdir $(CODEPY_LIB_DIR)
