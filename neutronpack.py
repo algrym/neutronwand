@@ -29,7 +29,7 @@ def load_constants():
     constants['neopixel_stick_brightness'] = float(os.getenv('neopixel_stick_brightness', "0.1"))
     constants['threewatt_frequency'] = int(os.getenv('threewatt_frequency', "20000"))
     constants['watch_dog_timeout_secs'] = int(os.getenv('watch_dog_timeout_secs', "7"))
-    constants['power_meter_speed'] = int(os.getenv('power_meter_speed', "10"))
+    constants['power_meter_speed'] = int(os.getenv('power_meter_speed', "30"))
     constants['power_meter_starting_speed'] = int(os.getenv('power_meter_starting_speed', "100"))
     constants['propmaker_featherwing_enable'] = get_pin(os.getenv('propmaker_featherwing_enable', "D10"))
 
@@ -228,7 +228,29 @@ def main_loop():
     next_stat_clock: int = supervisor.ticks_ms() + constants['stat_clock_time_ms']
     loop_count: int = 0
     next_watch_dog_clock: int = 0
-    current_state = State.STANDBY
+    current_state = State.STANDBY  # Set once to establish scope
+
+    # State transition
+    #
+    #   STANDBY = Wall power on, hero power off
+    # LOOP_IDLE = Hero power on, trigger inactive.
+    #  POWER_ON = Trigger active!
+    def state_transition_to(new_state):
+        global power_meter_cursor
+        print(f"*** Switching from {print_state(current_state)} to {print_state(new_state)}")
+        if new_state == State.LOOP_IDLE:  # Hero power on, trigger inactive
+            pass
+        elif new_state == State.STANDBY:  # Wall power on, hero power off
+            stick_pixels.fill(OFF)
+            power_meter_cursor = 0
+            set_threewatt_color(OFF)
+        elif new_state == State.POWER_ON:  # Trigger active!  Blast em!
+            pass
+        else:
+            new_state = current_state
+        return new_state
+
+    state_transition_to(State.STANDBY)  # Set again to reset state
 
     # main driver loop
     print("- Starting main driver loop")
@@ -241,14 +263,11 @@ def main_loop():
         if clock > next_stat_clock:
             # DEBUG: Remove this when a real state transition is added
             if current_state == State.STANDBY:
-                print(f"*** Switching from {print_state(current_state)} to {print_state(State.LOOP_IDLE)}")
-                current_state = State.LOOP_IDLE
+                current_state = state_transition_to(State.LOOP_IDLE)
             elif current_state == State.LOOP_IDLE:
-                print(f"*** Switching from {print_state(current_state)} to {print_state(State.POWER_ON)}")
-                current_state = State.POWER_ON
+                current_state = state_transition_to(State.POWER_ON)
             else:
-                print(f"*** Switching from {print_state(current_state)} to {print_state(State.STANDBY)}")
-                current_state = State.STANDBY
+                current_state = state_transition_to(State.STANDBY)
 
             elapsed_time = (clock - start_clock) / 1000  # Convert ms to seconds
             loops_per_second = loop_count / elapsed_time if elapsed_time > 0 else 0
@@ -271,10 +290,11 @@ def main_loop():
                 # Calculate time of next power meter update
                 next_power_meter_clock = clock + power_meter_speed
                 # Blink quietly in STANDBY
-                if power_meter_cursor >= len(stick_pixels):
-                    power_meter_cursor = 1  # Reset cursor if it exceeds the number of pixels
+                if power_meter_cursor >= 100:
+                    stick_pixels[0] = RED
+                    power_meter_cursor = 1
                 else:
-                    stick_pixels[0] = OFF if power_meter_cursor == 0 else YELLOW
+                    stick_pixels[0] = OFF
                     power_meter_cursor += 1
 
         elif current_state == State.POWER_ON:
