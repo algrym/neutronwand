@@ -29,7 +29,7 @@ def load_constants():
     constants['neopixel_stick_brightness'] = float(os.getenv('neopixel_stick_brightness', "0.1"))
     constants['threewatt_frequency'] = int(os.getenv('threewatt_frequency', "20000"))
     constants['watch_dog_timeout_secs'] = int(os.getenv('watch_dog_timeout_secs', "7"))
-    constants['power_meter_speed'] = int(os.getenv('power_meter_speed', "30"))
+    constants['power_meter_speed'] = int(os.getenv('power_meter_speed', "50"))
     constants['power_meter_starting_speed'] = int(os.getenv('power_meter_starting_speed', "100"))
     constants['propmaker_featherwing_enable'] = get_pin(os.getenv('propmaker_featherwing_enable', "D10"))
 
@@ -239,6 +239,9 @@ def main_loop():
         global power_meter_cursor
         print(f"*** Switching from {print_state(current_state)} to {print_state(new_state)}")
         if new_state == State.LOOP_IDLE:  # Hero power on, trigger inactive
+            stick_pixels.fill(OFF)
+            power_meter_cursor = 0
+            set_threewatt_color(OFF)
             pass
         elif new_state == State.STANDBY:  # Wall power on, hero power off
             stick_pixels.fill(OFF)
@@ -288,7 +291,7 @@ def main_loop():
             # Blink the Power Meter
             if clock > next_power_meter_clock:
                 # Calculate time of next power meter update
-                next_power_meter_clock = clock + power_meter_speed
+                next_power_meter_clock = clock + (power_meter_speed / 100)
                 # Blink quietly in STANDBY
                 if power_meter_cursor >= 100:
                     stick_pixels[0] = RED
